@@ -375,8 +375,8 @@ jobs:
       - name: Monitor logs
         # timeout-minutes: 120
         run: |
-          sudo sysctl -w net.ipv6.conf.all.disable_ipv6=1
-          sudo sysctl -w net.ipv6.conf.default.disable_ipv6=1
+          # sudo sysctl -w net.ipv6.conf.all.disable_ipv6=1
+          # sudo sysctl -w net.ipv6.conf.default.disable_ipv6=1
           tail -f /var/log/nginx/access.log /var/log/nginx/error.log ngrok.log &
           sleep 2h
 
