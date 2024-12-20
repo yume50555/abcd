@@ -1,1 +1,410 @@
-# hello
+name: WF DEF
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */6 * * *'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Chrome dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            gconf-service \
+            libasound2 \
+            libatk1.0-0 \
+            libc6 \
+            libcairo2 \
+            libcups2 \
+            libdbus-1-3 \
+            libexpat1 \
+            libfontconfig1 \
+            libgbm1 \
+            libgcc1 \
+            libgconf-2-4 \
+            libgdk-pixbuf2.0-0 \
+            libglib2.0-0 \
+            libgtk-3-0 \
+            libnspr4 \
+            libpango-1.0-0 \
+            libpangocairo-1.0-0 \
+            libstdc++6 \
+            libx11-6 \
+            libx11-xcb1 \
+            libxcb1 \
+            libxcomposite1 \
+            libxcursor1 \
+            libxdamage1 \
+            libxext6 \
+            libxfixes3 \
+            libxi6 \
+            libxrandr2 \
+            libxrender1 \
+            libxss1 \
+            libxtst6 \
+            ca-certificates \
+            fonts-liberation \
+            libappindicator1 \
+            libnss3 \
+            lsb-release \
+            xdg-utils \
+            wget \
+            xvfb 
+          sudo apt-get install -y \
+            libgconf-2-4 \
+            libatk1.0-0 \
+            libatk-bridge2.0-0 \
+            libgdk-pixbuf2.0-0 \
+            libgtk-3-0 \
+            libgbm-dev \
+            libnss3-dev \
+            libxss-dev \
+            fonts-liberation \
+            libappindicator3-1 \
+            libx11-xcb1 \
+            xdg-utils \
+            libxcomposite1 \
+            libxcursor1 \
+            libxdamage1 \
+            libxi6 \
+            libxtst6 \
+            libxrandr2 \
+            libasound2 \
+            libxss1 \
+            libxshmfence1
+      - name: Checkout main repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_TOKEN }}  # Use your GitHub token here
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      # - name: Setup PHP
+      #   uses: shivammathur/setup-php@v2
+      #   with:
+      #     php-version: '8.1'
+
+      - name: Get public IP
+        id: ip
+        run: |
+          PUBLIC_IP=$(curl -s https://api.ipify.org)
+          echo "PUBLIC_IP=${PUBLIC_IP}" >> $GITHUB_ENV
+
+      # - name: Create tunnel with ngrok
+      #   env:
+      #     NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
+      #   run: |
+      #     wget https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz
+      #     tar xvzf ngrok-v3-stable-linux-amd64.tgz
+      #     ./ngrok authtoken $NGROK_AUTH_TOKEN
+      #     ./ngrok http --log=stdout 80 > ngrok.log &
+      #     sleep 5
+      #     NGROK_URL=$(curl -s http://localhost:4040/api/tunnels | jq -r .tunnels[0].public_url)
+      #     echo "NGROK_URL=$NGROK_URL" >> $GITHUB_ENV
+      #     echo "Your services are accessible at: $NGROK_URL"
+
+      - name: Create tunnel with clf
+        env:
+          CLOUDFLARE_TOKEN: ${{ secrets.CLOUDFLARE_TOKEN }}
+        run: |
+          # Install cloudflared
+          curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+          sudo dpkg -i cloudflared.deb
+          sudo cloudflared service install $CLOUDFLARE_TOKEN
+          sleep 10
+          # You might want to verify the connection
+          # sudo cloudflared tunnel info
+          # # Get tunnel ID and verify
+          # TUNNEL_ID=$(sudo cloudflared tunnel list | grep -v 'NAME' | awk '{print $1}')
+          # echo "Tunnel ID: $TUNNEL_ID"
+          
+          # # Monitor initial connection
+          # timeout 30s sudo cloudflared tunnel info $TUNNEL_ID || true
+          
+          # # Optional: Monitor metrics for 30 seconds
+          # (curl -s http://localhost:2000/metrics > tunnel_metrics.txt) &
+          
+          # # List tunnels to get the ID/name
+          # TUNNEL_ID=$(sudo cloudflared tunnel list | grep -v 'NAME' | awk '{print $1}')
+          
+          # # Now we can check the specific tunnel info
+          # sudo cloudflared tunnel info $TUNNEL_ID
+          
+          # # Optional: Run tunnel with specific port if needed
+          # sudo cloudflared tunnel run --url http://localhost:80 $TUNNEL_ID
+
+      - name: Install nginx php
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nginx
+          sudo apt-get install -y php8.1-fpm php8.1-mysql php8.1-curl php8.1-gd php8.1-mbstring php8.1-xml php8.1-zip
+
+          # # Configure PHP-FPM
+          # sudo sed -i 's/user = www-data/user = runner/g' /etc/php/8.1/fpm/pool.d/www.conf
+          # sudo sed -i 's/group = www-data/group = runner/g' /etc/php/8.1/fpm/pool.d/www.conf
+          # sudo sed -i 's/listen.owner = www-data/listen.owner = runner/g' /etc/php/8.1/fpm/pool.d/www.conf
+          # sudo sed -i 's/listen.group = www-data/listen.group = runner/g' /etc/php/8.1/fpm/pool.d/www.conf
+
+          # # Start PHP-FPM
+          # sudo systemctl start php8.1-fpm
+
+      - name: Optimize Nginx Configuration
+        run: |
+          # sudo tee /etc/nginx/conf.d/performance.conf << EOF
+          # fastcgi_buffers 16 16k;
+          # fastcgi_buffer_size 32k;
+          # fastcgi_connect_timeout 300;
+          # fastcgi_send_timeout 300;
+          # fastcgi_read_timeout 300;
+          # # Compression
+          # gzip on;
+          # gzip_vary on;
+          # gzip_min_length 10240;
+          # gzip_proxied expired no-cache no-store private auth;
+          # gzip_types text/plain text/css text/xml text/javascript application/x-javascript application/xml;
+          # # Connection optimization
+          # keepalive_timeout 65;
+          # keepalive_requests 100;
+          # EOF
+          sudo tee /etc/nginx/conf.d/performance.conf << EOF
+          # FastCGI Buffers and Timeouts
+          fastcgi_buffers 16 16k;
+          fastcgi_buffer_size 32k;
+          fastcgi_connect_timeout 60s;
+          fastcgi_send_timeout 120s;
+          fastcgi_read_timeout 120s;
+          
+          # Compression
+          # gzip on;
+          # gzip_vary on;
+          # gzip_min_length 10240;
+          # gzip_proxied any;
+          # gzip_types text/plain text/css text/xml text/javascript application/javascript application/json;
+          
+          # Connection Optimization
+          keepalive_timeout 30s;
+          keepalive_requests 100;
+          
+          # Optional: Enable HTTP/2 (if supported)
+          # http2_push_preload on;
+          EOF
+          sudo nginx -t
+      - name: Optimize PHP-FPM
+        run: |
+          sudo tee /etc/php/8.1/fpm/pool.d/www.conf << EOF
+          [www]
+          user = www-data
+          group = www-data
+          listen = /run/php/php8.1-fpm.sock
+          listen.owner = www-data
+          listen.group = www-data
+          pm = dynamic
+          pm.max_children = 50
+          pm.start_servers = 5
+          pm.min_spare_servers = 5
+          pm.max_spare_servers = 35
+          pm.max_requests = 500
+          EOF
+          # sudo service php8.1-fpm restart
+
+      - name: Setup nginx reverse proxy
+        run: |
+          sudo tee /etc/nginx/sites-available/default > /dev/null << 'EOF'
+          server {
+              listen 80;
+              server_name _;
+              root /var/www/html;
+              index index.php index.html;
+
+              # Frontend SSR for root location
+              location / {
+                  proxy_pass http://localhost:4610;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection 'upgrade';
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+                  proxy_cache_bypass $http_upgrade;
+              }
+
+              # PHP application under /php-app
+              location /php-app {
+                  alias /var/www/html/php-app;
+                  try_files $uri $uri/ /php-app/index.php?$args;
+
+                  location ~ \.php$ {
+                      include snippets/fastcgi-php.conf;
+                      fastcgi_param SCRIPT_FILENAME $request_filename;
+                      fastcgi_pass unix:/run/php/php8.1-fpm.sock;
+                  }
+              }
+
+              location /app1 {
+                  proxy_pass http://localhost:3001;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection 'upgrade';
+                  proxy_set_header Host $host;
+                  proxy_cache_bypass $http_upgrade;
+              }
+
+              location /app2 {
+                  proxy_pass http://localhost:3003;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection 'upgrade';
+                  proxy_set_header Host $host;
+                  proxy_cache_bypass $http_upgrade;
+              }
+
+              location /app3 {
+                  proxy_pass http://localhost:3005;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection 'upgrade';
+                  proxy_set_header Host $host;
+                  proxy_cache_bypass $http_upgrade;
+              }
+
+            #   location ~ ^/php(/.*\.php)$ {
+            #     proxy_pass http://localhost:8000$1$is_args$args;
+            #     proxy_http_version 1.1;
+            #     proxy_set_header Upgrade $http_upgrade;
+            #     proxy_set_header Connection 'upgrade';
+            #     proxy_set_header Host $host;
+            #     proxy_cache_bypass $http_upgrade;
+            # }
+            # PHP files handling
+              # location /php {
+              #     root /home/runner/work/abcd/abcd/php;
+              #     index index.php;
+              #     location ~ \.php$ {
+              #         include snippets/fastcgi-php.conf;
+              #         fastcgi_pass unix:/var/run/php/php8.1-fpm.sock;
+              #         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+              #         include fastcgi_params;
+              #     }
+              # }
+          }
+          EOF
+
+          sudo systemctl restart nginx
+          sudo systemctl restart php8.1-fpm
+
+      - name: Clone private repositories
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          git clone https://${GH_TOKEN}@github.com/locionic/kaaforward-vtt.git repo1
+          git clone https://${GH_TOKEN}@github.com/locionic/kaaforward-api.git repo2
+          git clone https://${GH_TOKEN}@github.com/locionic/kaaforward-imgs.git repo3
+          git clone https://${GH_TOKEN}@github.com/locionic/kaaforward-php.git php-app
+          git clone https://${GH_TOKEN}@github.com/locionic/kaa-client.git repo4
+
+      - name: Install dependencies and start servers
+        run: |
+          # Server 1
+          cd repo1
+          npm install
+          node api/index.js &
+          cd ..
+
+          # Server 2
+          cd repo2
+          npm install
+          node api/index.js &
+          cd ..
+
+          # Server 3
+          cd repo3
+          npm install
+          npm run start &
+          cd ..
+
+          # Server php
+          # php -S localhost:8000 -t php/ &
+          # Move PHP app to web root
+          sudo mv php-app /var/www/html/
+          sudo chown -R www-data:www-data /var/www/html/php-app
+
+          # Frontend
+          sudo sysctl -w net.ipv6.conf.all.disable_ipv6=1
+          cd repo4
+          cp .env.example .env
+          npm i
+          npm run build
+          npm run start &
+          cd ..
+
+      - name: Configure firewall
+        run: |
+          sudo ufw allow 80/tcp
+          sudo ufw allow 443/tcp
+          sudo ufw --force enable
+
+      - name: Display access information
+        run: |
+          echo "Server is accessible at: http://${{ env.PUBLIC_IP }}"
+          echo "Configure your domain to point to this IP: ${{ env.PUBLIC_IP }}"
+          echo "Access your services at:"
+          echo "- http://your-domain.com/app1"
+          echo "- http://your-domain.com/app2"
+          # echo "- http://your-domain.com/app3"
+
+      - name: Create PHP test file
+        run: |
+          sudo tee /var/www/html/php-app/index.php > /dev/null << 'EOF'
+          <?php
+          header('Content-Type: application/json');
+          echo json_encode([
+              'status' => 'success',
+              'message' => 'PHP is working!',
+              'php_version' => phpversion(),
+              'server_time' => date('Y-m-d H:i:s')
+          ]);
+          EOF
+
+      - name: Monitor logs
+        # timeout-minutes: 120
+        run: |
+          tail -f /var/log/nginx/access.log /var/log/nginx/error.log ngrok.log &
+          sleep 2h
+
+      # - name: Verify Connection and Performance
+      #   run: |
+      #     # Wait for service to be fully established
+      #     sleep 15
+          
+      #     # Basic connection test
+      #     curl -I https://your-domain.com
+          
+      #     # Check Nginx status
+      #     sudo nginx -t
+          
+      #     # Display relevant logs
+      #     echo "=== Nginx Error Logs ==="
+      #     sudo tail -n 50 /var/log/nginx/error.log || true
+          
+      #     echo "=== PHP-FPM Logs ==="
+      #     sudo tail -n 50 /var/log/php8.1-fpm.log || true
+          
+      #     echo "=== Tunnel Metrics ==="
+      #     cat tunnel_metrics.txt || true
+      #     sleep 2h
+
+      # - name: Keep alive
+      #   run: |
+      #     echo "Services are accessible at: $NGROK_URL"
+      #     echo "app1: $NGROK_URL/app1"
+      #     echo "app2: $NGROK_URL/app2"
+      #     # echo "app3: $NGROK_URL/app3"
+      #     # echo "php: $NGROK_URL/php"
+      #     sleep 1h
