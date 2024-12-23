@@ -2,8 +2,8 @@ name: WF DEF
 
 on:
   workflow_dispatch:
-  # schedule:
-  #   - cron: '0 */6 * * *'
+  schedule:
+    - cron: '0 */6 * * *'
 
 jobs:
   deploy:
@@ -118,26 +118,6 @@ jobs:
           sudo dpkg -i cloudflared.deb
           sudo cloudflared service install $CLOUDFLARE_TOKEN
           sleep 10
-          # You might want to verify the connection
-          # sudo cloudflared tunnel info
-          # # Get tunnel ID and verify
-          # TUNNEL_ID=$(sudo cloudflared tunnel list | grep -v 'NAME' | awk '{print $1}')
-          # echo "Tunnel ID: $TUNNEL_ID"
-          
-          # # Monitor initial connection
-          # timeout 30s sudo cloudflared tunnel info $TUNNEL_ID || true
-          
-          # # Optional: Monitor metrics for 30 seconds
-          # (curl -s http://localhost:2000/metrics > tunnel_metrics.txt) &
-          
-          # # List tunnels to get the ID/name
-          # TUNNEL_ID=$(sudo cloudflared tunnel list | grep -v 'NAME' | awk '{print $1}')
-          
-          # # Now we can check the specific tunnel info
-          # sudo cloudflared tunnel info $TUNNEL_ID
-          
-          # # Optional: Run tunnel with specific port if needed
-          # sudo cloudflared tunnel run --url http://localhost:80 $TUNNEL_ID
 
       - name: Install nginx php
         run: |
@@ -222,19 +202,6 @@ jobs:
               root /var/www/html;
               index index.php index.html;
 
-              # Frontend SSR for root location
-              location / {
-                  proxy_pass http://localhost:4610;
-                  proxy_http_version 1.1;
-                  proxy_set_header Upgrade $http_upgrade;
-                  proxy_set_header Connection 'upgrade';
-                  proxy_set_header Host $host;
-                  proxy_set_header X-Real-IP $remote_addr;
-                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto $scheme;
-                  proxy_cache_bypass $http_upgrade;
-              }
-
               # PHP application under /php-app
               location /php-app {
                   alias /var/www/html/php-app;
@@ -274,25 +241,18 @@ jobs:
                   proxy_cache_bypass $http_upgrade;
               }
 
-            #   location ~ ^/php(/.*\.php)$ {
-            #     proxy_pass http://localhost:8000$1$is_args$args;
-            #     proxy_http_version 1.1;
-            #     proxy_set_header Upgrade $http_upgrade;
-            #     proxy_set_header Connection 'upgrade';
-            #     proxy_set_header Host $host;
-            #     proxy_cache_bypass $http_upgrade;
-            # }
-            # PHP files handling
-              # location /php {
-              #     root /home/runner/work/abcd/abcd/php;
-              #     index index.php;
-              #     location ~ \.php$ {
-              #         include snippets/fastcgi-php.conf;
-              #         fastcgi_pass unix:/var/run/php/php8.1-fpm.sock;
-              #         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-              #         include fastcgi_params;
-              #     }
-              # }
+              # Frontend SSR for root location
+              location / {
+                  proxy_pass http://localhost:4610;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection 'upgrade';
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+                  proxy_cache_bypass $http_upgrade;
+              }
           }
           EOF
 
@@ -375,10 +335,8 @@ jobs:
       - name: Monitor logs
         # timeout-minutes: 120
         run: |
-          # sudo sysctl -w net.ipv6.conf.all.disable_ipv6=1
-          # sudo sysctl -w net.ipv6.conf.default.disable_ipv6=1
           tail -f /var/log/nginx/access.log /var/log/nginx/error.log ngrok.log &
-          sleep 2h
+          sleep 6h
 
       # - name: Verify Connection and Performance
       #   run: |
